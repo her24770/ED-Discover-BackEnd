@@ -1,3 +1,7 @@
+/*
+ *Gestiona todas las conexiones a la base de datos Neo4j.
+ */
+
 const neo4j = require('neo4j-driver');
 require('dotenv').config();
 
@@ -8,11 +12,14 @@ const {
   NEO4J_DATABASE
 } = process.env;
 
+//conexion de driver
 const driver = neo4j.driver(
   NEO4J_URI,
   neo4j.auth.basic(NEO4J_USERNAME, NEO4J_PASSWORD)
 );
 
+
+//creaciond de sesion, reutilizar configuracion
 const getSession = () => {
   return driver.session({
     database: NEO4J_DATABASE
@@ -24,7 +31,7 @@ const testConnection = async () => {
   const session = getSession();
   try {
     const result = await session.run('MATCH (n) RETURN count(n) AS count');
-    console.log('Conexión a Neo4j establecida correctamente');
+    console.log('Conexion a base de datos exitosa');
     const count = result.records[0].get('count').toNumber();
     console.log(`Base de datos contiene ${count} nodos`);
     return true;
@@ -36,12 +43,13 @@ const testConnection = async () => {
   }
 };
 
-// Cerrar driver cuando la aplicación se cierra
+// Cierre de driver
 const closeDriver = async () => {
   await driver.close();
   console.log('Conexión a Neo4j cerrada');
 };
 
+// Exportar funciones, reutilizar configuracion
 module.exports = {
   getSession,
   testConnection,
