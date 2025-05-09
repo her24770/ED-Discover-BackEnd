@@ -1,3 +1,9 @@
+/**
+ * @file app.js
+ * @description Archivo principal de la aplicación, configuracion inicial de proyecto
+ */
+
+// Importar dependencias
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -9,19 +15,14 @@ const routes = require('./routes');
 // Inicializar la aplicación
 const app = express();
 
-// Middlewares
+// uso Middlewares
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Rutas
+// Rutas de etiquetas
 app.use('/api', routes);
-
-// Ruta de prueba
-app.get('/', (req, res) => {
-  res.json({ message: 'Backend con Neo4j funcionando correctamente' });
-});
 
 // Manejo de errores
 app.use((err, req, res, next) => {
@@ -33,4 +34,5 @@ app.use((err, req, res, next) => {
   });
 });
 
+//exportar a otros archivos
 module.exports = app;
