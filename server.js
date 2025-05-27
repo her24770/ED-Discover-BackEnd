@@ -13,11 +13,30 @@ const PORT = process.env.PORT || 3000;
 // Iniciar el servidor
 const server = app.listen(PORT, async () => {
   console.log(`Servidor corriendo en el puerto ${PORT}`);
+  
+  // Probar conexión a Neo4j
   await testConnection();
 });
 
 // Manejo de cierre del servidor
-process.on('SIGINT', () => process.exit(0));
+const handleShutdown = async () => {
+  console.log('Cerrando servidor...');
+  
+  // Cerrar conexión de Neo4j
+  await closeDriver();
+  
+  // Cerrar servidor HTTP
+  server.close(() => {
+    console.log('Servidor HTTP cerrado');
+    process.exit(0);
+  });
+  
+  // Si el servidor no se cierra en 5 segundos, forzar cierre
+  setTimeout(() => {
+    console.log('Forzando cierre del proceso');
+    process.exit(1);
+  }, 5000);
+};
 
 // Capturar señales de cierre
 process.on('SIGTERM', handleShutdown);
