@@ -1,24 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const { validateUserCreate, validateUserUpdate } = require('../middleware/userMiddleware');
 
-// Ruta para obtener todos los usuarios
-router.get('/', userController.getAllUsers);
+// GET /users/email/:email - Buscar usuario por email
+router.get('/email/:email', userController.getUserByEmail);
 
-// Ruta para buscar usuarios por nombre
-router.get('/search', userController.searchUsers);
+// GET /users/email/:email/friends - Listar amigos de un usuario
+router.get('/friends/:email', userController.getUserFriends);
 
-// Ruta para obtener un usuario por ID
-router.get('/:id', userController.getUserById);
+// POST /users - Crear un nuevo usuario
+router.post('/register', userController.createUser);
 
-// Ruta para crear un nuevo usuario
-router.post('/', validateUserCreate, userController.createUser);
-
-// Ruta para actualizar un usuario
-router.put('/:id', validateUserUpdate, userController.updateUser);
-
-// Ruta para eliminar un usuario
-router.delete('/:id', userController.deleteUser);
+// POST /users/login - Login de usuario
+router.post('/login', userController.loginUser);
 
 module.exports = router;

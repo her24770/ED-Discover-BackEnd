@@ -59,7 +59,7 @@ CREATE (u2)-[:listen { strength: 92 }]->(s2);
 
 // Usuario -> Usuario (follow entre usuarios)
 MATCH (u1:User { name: "Ana López" }), (u2:User { name: "Carlos Ruiz" })
-CREATE (u1)-[:follow]->(u2);
+CREATE (u1)-[:friends]->(u2);
 
 // Usuario -> Artista [follow]
 MATCH (u1:User { name: "Ana López" }), (a1:Artist { name: "Rosalía" })

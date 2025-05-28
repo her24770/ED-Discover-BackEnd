@@ -1,209 +1,298 @@
-const User = require('../models/userModel');
-const bcrypt = require('bcrypt'); // Para encriptar contraseñas
+/**
+ * Controlador para manejar las operaciones de usuarios
+ * Todo junto: lógica de BD + lógica de HTTP
+ */
 
-const userController = {
-  // Obtener todos los usuarios
-  getAllUsers: async (req, res) => {
-    try {
-      const users = await User.findAll();
-      
-      res.json({
-        success: true,
-        count: users.length,
-        data: users
-      });
-    } catch (error) {
-      console.error('Error al obtener usuarios:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error al obtener los usuarios',
-        error: error.message
-      });
-    }
-  },
+const { getSession } = require('../config/db'); // Ajusta la ruta según tu estructura
+const PasswordUtils = require('../utils/passwordUtils'); // Ajusta la ruta según tu estructura
 
-  // Obtener un usuario por ID
-  getUserById: async (req, res) => {
+
+const UserController = {
+  /**
+   * Buscar usuario por email
+   * GET /users/email/:email
+   */
+  async getUserByEmail(req, res) {
+    const session = getSession();
+    
     try {
-      const userId = req.params.id;
-      const user = await User.findById(userId);
+      const { email } = req.params;
       
-      if (!user) {
-        return res.status(404).json({
+      // Validar que el email esté presente
+      if (!email) {
+        return res.status(400).json({
           success: false,
-          message: `No se encontró ningún usuario con ID ${userId}`
+          message: 'El email es requerido'
         });
       }
       
-      res.json({
+      // Query a Neo4j
+      const query = `
+        MATCH (u:User)
+        WHERE u.email = $email
+        RETURN u
+      `;
+      
+      const result = await session.run(query, { email });
+      
+      // Verificar si se encontró el usuario
+      if (result.records.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Usuario no encontrado'
+        });
+      }
+      
+      // Extraer las propiedades del nodo User
+      const userNode = result.records[0].get('u');
+      const userData = userNode.properties;
+      
+      // Respuesta exitosa
+      res.status(200).json({
         success: true,
-        data: user
+        message: 'Usuario encontrado',
+        data: userData
       });
+      
     } catch (error) {
-      console.error('Error al obtener usuario por ID:', error);
+      console.error('Error al buscar usuario por email:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al obtener el usuario',
+        message: 'Error interno del servidor',
         error: error.message
       });
+    } finally {
+      await session.close();
     }
   },
 
-  // Crear un nuevo usuario
-  createUser: async (req, res) => {
+
+  /**
+   * Listar amigos de un usuario por email
+   * GET /users/email/:email/friends
+   */
+  async getUserFriends(req, res) {
+    const session = getSession();
+    
+    try {
+      const { email } = req.params;
+      
+      // Validar que el email esté presente
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: 'El email es requerido'
+        });
+      }
+      
+      // Query a Neo4j para obtener amigos
+      const query = `
+        MATCH (u:User)-[:friends]-(friend:User)
+        WHERE u.email = $email
+        RETURN friend
+      `;
+      
+      const result = await session.run(query, { email });
+      
+      // Verificar si se encontraron amigos
+      if (result.records.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'No se encontraron amigos para este usuario o el usuario no existe'
+        });
+      }
+      
+      // Extraer todos los datos de los amigos
+      const friends = result.records.map(record => {
+        const friendNode = record.get('friend');
+        return friendNode.properties;
+      });
+      
+      // Respuesta exitosa
+      res.status(200).json({
+        success: true,
+        message: 'Amigos encontrados',
+        data: friends,
+        count: friends.length
+      });
+      
+    } catch (error) {
+      console.error('Error al buscar amigos del usuario:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor',
+        error: error.message
+      });
+    } finally {
+      await session.close();
+    }
+  },
+
+  /**
+   * Crear un nuevo usuario
+   * POST /users
+   */
+  async createUser(req, res) {
+    const session = getSession();
+    
     try {
       const { name, email, date_Birth, password } = req.body;
       
-      // Validaciones básicas
-      if (!name || !email || !password) {
+      // Validar que todos los campos requeridos estén presentes
+      if (!name || !email || !date_Birth || !password) {
         return res.status(400).json({
           success: false,
-          message: 'Nombre, email y contraseña son campos requeridos'
+          message: 'Todos los campos son requeridos: name, email, date_Birth, password'
         });
       }
       
-      // Verificar si ya existe un usuario con ese email
-      const existingUser = await User.findByEmail(email);
-      if (existingUser) {
+      // Validar fortaleza de la contraseña (opcional)
+      const passwordValidation = PasswordUtils.validateStrength(password);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          message: 'La contraseña no cumple con los requisitos de seguridad',
+          errors: passwordValidation.errors
+        });
+      }
+      
+      // Encriptar la contraseña
+      const encryptedPassword = await PasswordUtils.encrypt(password);
+      
+      // Verificar si el usuario ya existe
+      const checkQuery = `
+        MATCH (u:User)
+        WHERE u.email = $email
+        RETURN u
+      `;
+      
+      const existingUser = await session.run(checkQuery, { email });
+      
+      if (existingUser.records.length > 0) {
         return res.status(409).json({
           success: false,
-          message: 'Ya existe un usuario con ese email'
+          message: 'Ya existe un usuario con este email'
         });
       }
       
-      // Encriptar contraseña
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
+      // Query para crear el nuevo usuario
+      const createQuery = `
+        CREATE (u:User { 
+          name: $name, 
+          email: $email, 
+          date_Birth: date($date_Birth), 
+          password: $password 
+        })
+        RETURN u
+      `;
       
-      // Crear usuario
-      const userData = {
+      const result = await session.run(createQuery, {
         name,
         email,
-        password: hashedPassword,
-        date_Birth: date_Birth || null,
-        created_at: new Date().toISOString()
-      };
+        date_Birth,
+        password: encryptedPassword // Usar la contraseña encriptada
+      });
       
-      const newUser = await User.create(userData);
+      // Extraer los datos del usuario creado (sin mostrar la contraseña)
+      const userNode = result.records[0].get('u');
+      const createdUser = { ...userNode.properties };
       
+      // Remover la contraseña de la respuesta por seguridad
+      delete createdUser.password;
+      
+      // Respuesta exitosa
       res.status(201).json({
         success: true,
         message: 'Usuario creado exitosamente',
-        data: newUser
+        data: createdUser
       });
+      
     } catch (error) {
       console.error('Error al crear usuario:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al crear el usuario',
+        message: 'Error interno del servidor',
         error: error.message
       });
+    } finally {
+      await session.close();
     }
   },
 
-  // Actualizar un usuario
-  updateUser: async (req, res) => {
-    try {
-      const userId = req.params.id;
-      let { name, email, date_Birth, password } = req.body;
-      
-      // Verificar si el usuario existe
-      const existingUser = await User.findById(userId);
-      if (!existingUser) {
-        return res.status(404).json({
-          success: false,
-          message: `No se encontró ningún usuario con ID ${userId}`
-        });
-      }
-      
-      // Preparar datos para actualizar
-      const updateData = {};
-      
-      if (name) updateData.name = name;
-      if (email) updateData.email = email;
-      if (date_Birth) updateData.date_Birth = date_Birth;
-      
-      // Si se proporciona contraseña, encriptarla
-      if (password) {
-        const saltRounds = 10;
-        updateData.password = await bcrypt.hash(password, saltRounds);
-      }
-      
-      // Actualizar usuario
-      const updatedUser = await User.update(userId, updateData);
-      
-      res.json({
-        success: true,
-        message: 'Usuario actualizado exitosamente',
-        data: updatedUser
-      });
-    } catch (error) {
-      console.error('Error al actualizar usuario:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error al actualizar el usuario',
-        error: error.message
-      });
-    }
-  },
 
-  // Eliminar un usuario
-  deleteUser: async (req, res) => {
+   /**
+   * Login de usuario
+   * POST /users/login
+   */
+  async loginUser(req, res) {
+    const session = getSession();
+    
     try {
-      const userId = req.params.id;
+      console.log("hola")
+      const { email, password } = req.body;
       
-      // Intentar eliminar el usuario
-      const deleted = await User.delete(userId);
-      
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: `No se encontró ningún usuario con ID ${userId}`
-        });
-      }
-      
-      res.json({
-        success: true,
-        message: `Usuario con ID ${userId} eliminado correctamente`
-      });
-    } catch (error) {
-      console.error('Error al eliminar usuario:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error al eliminar el usuario',
-        error: error.message
-      });
-    }
-  },
-
-  // Buscar usuarios por nombre
-  searchUsers: async (req, res) => {
-    try {
-      const { name } = req.query;
-      
-      if (!name) {
+      // Validar que los campos estén presentes
+      if (!email || !password) {
         return res.status(400).json({
           success: false,
-          message: 'Se requiere un término de búsqueda'
+          message: 'Email y contraseña son requeridos'
         });
       }
       
-      const users = await User.searchByName(name);
+      // Buscar usuario por email
+      const query = `
+        MATCH (u:User)
+        WHERE u.email = $email
+        RETURN u
+      `;
       
-      res.json({
+      const result = await session.run(query, { email });
+      
+      // Verificar si el usuario existe
+      if (result.records.length === 0) {
+        return res.status(401).json({
+          success: false,
+          message: 'Credenciales inválidas'
+        });
+      }
+      
+      // Obtener datos del usuario
+      const userNode = result.records[0].get('u');
+      const userData = userNode.properties;
+      
+      // Verificar la contraseña
+      const isPasswordValid = await PasswordUtils.verify(password, userData.password);
+      
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          success: false,
+          message: 'Credenciales inválidas'
+        });
+      }
+      
+      // Login exitoso - remover contraseña de la respuesta
+      const userResponse = { ...userData };
+      delete userResponse.password;
+      
+      res.status(200).json({
         success: true,
-        count: users.length,
-        data: users
+        message: 'Login exitoso',
+        data: userResponse
       });
+      
     } catch (error) {
-      console.error('Error al buscar usuarios:', error);
+      console.error('Error en login:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al buscar usuarios',
+        message: 'Error interno del servidor',
         error: error.message
       });
+    } finally {
+      await session.close();
     }
   }
+
+
 };
 
-module.exports = userController;
+module.exports = UserController;
