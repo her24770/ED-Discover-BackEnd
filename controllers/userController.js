@@ -228,7 +228,6 @@ const UserController = {
     const session = getSession();
     
     try {
-      console.log("hola")
       const { email, password } = req.body;
       
       // Validar que los campos estén presentes
@@ -290,7 +289,185 @@ const UserController = {
     } finally {
       await session.close();
     }
+  },
+
+
+  /**
+ * Obtener los 5 géneros más escuchados por un usuario
+ * GET /users/:email/top-genres
+ */
+async getTopGenresByUserEmail(req, res) {
+  const session = getSession();
+
+  try {
+    const { email } = req.params;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'El email es requerido'
+      });
+    }
+
+    const query = `
+      MATCH (u:User {email: $email})-[l:like]->(g:Gender)
+      RETURN g.name AS genre, g.description AS description, l.strength AS strength
+      ORDER BY l.strength DESC
+      LIMIT 5
+    `;
+
+    const result = await session.run(query, { email });
+
+    const genres = result.records.map(record => ({
+      genre: record.get('genre'),
+      description: record.get('description'),
+      strength: record.get('strength').toInt?.() ?? record.get('strength') // por si strength es un Integer de neo4j
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: 'Géneros más escuchados obtenidos correctamente',
+      data: genres
+    });
+
+  } catch (error) {
+    console.error('Error al obtener los géneros más escuchados:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: error.message
+    });
+  } finally {
+    await session.close();
   }
+},
+
+
+/**
+ * Obtener los 5 artistas más seguidos por un usuario según la fuerza del follow
+ * GET /api/users/topartists/:email
+ */
+async getTopArtistsByUserEmail(req, res) {
+  const session = getSession();
+  try {
+    const { email } = req.params;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'El email es requerido' });
+    }
+
+    const query = `
+      MATCH (u:User { email: $email })-[f:follow]->(a:Artist)
+      RETURN a, f.strength AS strength
+      ORDER BY strength DESC
+      LIMIT 5
+    `;
+
+    const result = await session.run(query, { email });
+
+    const topArtists = result.records.map(record => {
+      const artist = record.get('a').properties;
+      artist.strength = record.get('strength').toInt();
+      return artist;
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Top 5 artistas por usuario',
+      data: topArtists
+    });
+  } catch (error) {
+    console.error('Error al obtener top artistas:', error);
+    res.status(500).json({ success: false, message: 'Error interno', error: error.message });
+  } finally {
+    await session.close();
+  }
+},
+
+
+
+/**
+ * Obtener las 5 emociones más sentidas por un usuario
+ * GET /api/users/topemotions/:email
+ */
+async getTopEmotionsByUserEmail(req, res) {
+  const session = getSession();
+  try {
+    const { email } = req.params;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'El email es requerido' });
+    }
+
+    const query = `
+      MATCH (u:User { email: $email })-[f:feeling]->(e:Emotion)
+      RETURN e, f.strength AS strength
+      ORDER BY strength DESC
+      LIMIT 5
+    `;
+
+    const result = await session.run(query, { email });
+
+    const topEmotions = result.records.map(record => {
+      const emotion = record.get('e').properties;
+      emotion.strength = record.get('strength').toInt();
+      return emotion;
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Top 5 emociones por usuario',
+      data: topEmotions
+    });
+  } catch (error) {
+    console.error('Error al obtener emociones:', error);
+    res.status(500).json({ success: false, message: 'Error interno', error: error.message });
+  } finally {
+    await session.close();
+  }
+},
+
+
+
+/**
+ * Obtener los 5 álbumes más escuchados por un usuario, basado en canciones escuchadas
+ * GET /api/users/topalbums/:email
+ */
+async getTopAlbumsByUserEmail(req, res) {
+  const session = getSession();
+  try {
+    const { email } = req.params;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'El email es requerido' });
+    }
+
+    const query = `
+      MATCH (u:User { email: $email })-[l:listen]->(s:Song)-[:belongs_to]->(al:Album)
+      RETURN al, SUM(l.strength) AS totalStrength
+      ORDER BY totalStrength DESC
+      LIMIT 5
+    `;
+
+    const result = await session.run(query, { email });
+
+    const topAlbums = result.records.map(record => {
+      const album = record.get('al').properties;
+      album.totalStrength = record.get('totalStrength').toInt();
+      return album;
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Top 5 álbumes escuchados por el usuario',
+      data: topAlbums
+    });
+  } catch (error) {
+    console.error('Error al obtener álbumes:', error);
+    res.status(500).json({ success: false, message: 'Error interno', error: error.message });
+  } finally {
+    await session.close();
+  }
+},
+
+
 
 
 };
