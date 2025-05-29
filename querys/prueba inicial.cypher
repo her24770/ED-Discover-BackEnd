@@ -83,6 +83,10 @@ MATCH (u1:User { name: "Ana López" }), (r1:Region { country: "Spain" })
 CREATE (u1)-[:preference { strength: 70 }]->(r1);
 
 
+MATCH (u1:User { name: "name" }), (a1:Album { name: "name" })
+CREATE (u1)-[:like { strength: 70 }]->(a1);
+
+
 
 
 

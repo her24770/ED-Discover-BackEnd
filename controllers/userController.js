@@ -440,27 +440,27 @@ async getTopAlbumsByUserEmail(req, res) {
     }
 
     const query = `
-      MATCH (u:User { email: $email })-[l:listen]->(s:Song)-[:belongs_to]->(al:Album)
-      RETURN al, SUM(l.strength) AS totalStrength
-      ORDER BY totalStrength DESC
+      MATCH (u:User { email: $email })-[f:like]->(e:Album)
+      RETURN e, f.strength AS strength
+      ORDER BY strength DESC
       LIMIT 5
     `;
 
     const result = await session.run(query, { email });
 
-    const topAlbums = result.records.map(record => {
-      const album = record.get('al').properties;
-      album.totalStrength = record.get('totalStrength').toInt();
-      return album;
+    const topEmotions = result.records.map(record => {
+      const emotion = record.get('e').properties;
+      emotion.strength = record.get('strength').toInt();
+      return emotion;
     });
 
     res.status(200).json({
       success: true,
-      message: 'Top 5 álbumes escuchados por el usuario',
-      data: topAlbums
+      message: 'Top 5 emociones por usuario',
+      data: topEmotions
     });
   } catch (error) {
-    console.error('Error al obtener álbumes:', error);
+    console.error('Error al obtener emociones:', error);
     res.status(500).json({ success: false, message: 'Error interno', error: error.message });
   } finally {
     await session.close();
