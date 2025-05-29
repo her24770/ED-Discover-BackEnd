@@ -54,9 +54,6 @@ CREATE
 MATCH (u1:User { name: "Ana López" }), (s1:Song { code: "ROS001" })
 CREATE (u1)-[:listen { strength: 85 }]->(s1);
 
-MATCH (u2:User { name: "Carlos Ruiz" }), (s2:Song { code: "BUN002" })
-CREATE (u2)-[:listen { strength: 92 }]->(s2);
-
 // Usuario -> Usuario (follow entre usuarios)
 MATCH (u1:User { name: "Ana López" }), (u2:User { name: "Carlos Ruiz" })
 CREATE (u1)-[:friends]->(u2);
@@ -84,6 +81,15 @@ CREATE (u2)-[:feeling { strength: 80 }]->(e1);
 // Usuario -> Región [preference]
 MATCH (u1:User { name: "Ana López" }), (r1:Region { country: "Spain" })
 CREATE (u1)-[:preference { strength: 70 }]->(r1);
+
+
+
+
+
+
+
+
+
 
 // Canción -> Álbum
 MATCH (s1:Song { code: "ROS001" }), (al1:Album { name: "Motomami" })
