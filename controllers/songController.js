@@ -143,80 +143,76 @@ const SongController = {
      * Recomendacion de usuarios basada en canciones que le gustan a un usuario
      * GET /songs/recommendations/friends/:email
      */
-    async getFriendsRecommendations(req, res) {
-      const session = getSession();
+   async getFriendsRecommendations(req, res) {
+  const session = getSession();
+
+  try {
+    const { email } = req.params;
     
-      try {
-        const { email } = req.params;
-        
-        // Validar que el email esté presente
-        if (!email) {
-          return res.status(400).json({
-            success: false,
-            message: 'Email requerido'
-          });
-        }
-    
-        // Query a Neo4j usuarios que escuchan las mismas canciones que el usuario 
-        // y calcular la similitud usando el índice de Jaccard
-        const query = `
+    // Validar que el email esté presente
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email requerido'
+      });
+    }
 
-          MATCH (me:User {email: $email})-[:listen]->(s:Song)
-          WITH me, COLLECT(DISTINCT s) AS mySongs
+    // Query a Neo4j usuarios que escuchan las mismas canciones que el usuario 
+    // y calcular la similitud usando el índice de Jaccard
+    const query = `
+      MATCH (me:User {email: $email})-[:listen]->(s:Song)
+      WITH me, COLLECT(DISTINCT s) AS mySongs
 
-          MATCH (other:User)-[:listen]->(sharedSong:Song)
-          WHERE me <> other AND sharedSong IN mySongs AND NOT (me)-[:friends]-(other)
-          WITH me, other, COLLECT(DISTINCT sharedSong) AS sharedSongs, mySongs
+      MATCH (other:User)-[:listen]->(sharedSong:Song)
+      WHERE me <> other AND sharedSong IN mySongs AND NOT (me)-[:friends]-(other)
+      WITH me, other, COLLECT(DISTINCT sharedSong) AS sharedSongs, mySongs
 
-          MATCH (other)-[:listen]->(otherSong:Song)
-          WITH other, sharedSongs, mySongs, COLLECT(DISTINCT otherSong) AS otherSongs
+      MATCH (other)-[:listen]->(otherSong:Song)
+      WITH other, sharedSongs, mySongs, COLLECT(DISTINCT otherSong) AS otherSongs
 
-          WITH other, SIZE(sharedSongs) AS intersection,
-              (SIZE(mySongs) + SIZE(otherSongs) - SIZE(sharedSongs)) AS union
+      WITH other, SIZE(sharedSongs) AS intersection,
+          (SIZE(mySongs) + SIZE(otherSongs) - SIZE(sharedSongs)) AS union
 
-          WITH other, (1.0 * intersection / union) AS jaccardScore
-          RETURN other.email AS similarUser
-          ORDER BY jaccardScore DESC
-          LIMIT 5
+      WITH other, (1.0 * intersection / union) AS jaccardScore
+      RETURN other AS similarUser, jaccardScore
+      ORDER BY jaccardScore DESC
+      LIMIT 5
+    `;
+    const result = await session.run(query, { email });
 
-        `;
-        const result = await session.run(query, { email });
-    
-        // Verificar si se encontraron amigos
-        if (result.records.length === 0) {
-          return res.status(404).json({
-            success: false,
-            message: 'No se encontraron recomendaciones de amigos para este usuario o el usuario no existe'
-          });
-        }
-  
-        // Extraer todos los datos de los amigos
-        const friends = result.records.map(record => {
-          const friendNode = record.get('friend');
-          return friendNode.properties;
-        });
-  
-        // Respuesta exitosa
-        res.status(200).json({
-          success: true,
-          message: 'Recomendaciones de amigos encontradas',
-          data: friends,
-          count: friends.length
-        });
-      }
-  
-      catch (error) {
-        console.error('Error al buscar recomendaciones de amigos:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Error interno del servidor',
-          error: error.message
-        });
-      } finally {
-        await session.close();
-      }
+    // Verificar si se encontraron amigos
+    if (result.records.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No se encontraron recomendaciones de amigos para este usuario o el usuario no existe'
+      });
+    }
 
-    },
+    // Extraer los emails de los usuarios similares
+    const recommendations = result.records.map(record => ({
+      email: record.get('similarUser'),
+      similarityScore: record.get('jaccardScore')
+    }));
+
+    // Respuesta exitosa
+    res.status(200).json({
+      success: true,
+      message: 'Recomendaciones de amigos encontradas',
+      data: recommendations,
+      count: recommendations.length
+    });
+  }
+  catch (error) {
+    console.error('Error al buscar recomendaciones de amigos:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: error.message
+    });
+  } finally {
+    await session.close();
+  }
+},
 
 
   /**
