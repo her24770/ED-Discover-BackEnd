@@ -161,23 +161,24 @@ const SongController = {
         // y calcular la similitud usando el índice de Jaccard
         const query = `
 
-          MATCH (me:User {email: $email})-[:listen]->(s:Song)<-[:listen]-(other:User)
-          WHERE me <> other
-          WITH other, COLLECT(DISTINCT s) AS sharedSongs
+          MATCH (me:User {email: $email})-[:listen]->(s:Song)
+          WITH me, COLLECT(DISTINCT s) AS mySongs
 
-          MATCH (me)-[:listen]->(mySong:Song)
-          WITH other, sharedSongs, COLLECT(DISTINCT mySong) AS mySongs
+          MATCH (other:User)-[:listen]->(sharedSong:Song)
+          WHERE me <> other AND sharedSong IN mySongs AND NOT (me)-[:friends]-(other)
+          WITH me, other, COLLECT(DISTINCT sharedSong) AS sharedSongs, mySongs
 
           MATCH (other)-[:listen]->(otherSong:Song)
           WITH other, sharedSongs, mySongs, COLLECT(DISTINCT otherSong) AS otherSongs
 
           WITH other, SIZE(sharedSongs) AS intersection,
-          (SIZE(mySongs) + SIZE(otherSongs) - SIZE(sharedSongs)) AS union
+              (SIZE(mySongs) + SIZE(otherSongs) - SIZE(sharedSongs)) AS union
 
           WITH other, (1.0 * intersection / union) AS jaccardScore
           RETURN other.email AS similarUser
           ORDER BY jaccardScore DESC
           LIMIT 5
+
         `;
         const result = await session.run(query, { email });
     
@@ -291,6 +292,7 @@ const SongController = {
     }
 
   },
+
 
 };
 
