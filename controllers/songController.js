@@ -290,91 +290,27 @@ const SongController = {
   },
 
   /**
-   * Recomendacion de canciones basada en el año de las canciones que le gustan a un usuario
-   * GET /songs/popular/:email
-   */
-
-  async getRecommendationByYear(req, res) {
-    const session = getSession();
-    
-    try {
-      const { email } = req.params;
-      
-      // Validar que el email esté presente
-      if (!email) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email requerido'
-        });
-      }
-    
-      // Recomendacion de canciones basada en el año de las canciones que le gustan al usuario
-      const query = `
-        MATCH (u:User {email: $email})-[:listen]->(s:Song)-[:released_in]-> (y:Year)
-        
-      `;
-      
-      const result = await session.run(query, { email });
-    
-      // Verificar si se encontraron canciones
-      if (result.records.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'No se encontraron recomendaciones por año para este usuario o el usuario no existe'
-        });
-      }
+ * Recomendacion de canciones basada en el año de las canciones que le gustan a un usuario
+ * GET /songs/popular/:email
+ */
+/**
+ * Recomendacion de canciones basada en el año de las canciones que le gustan a un usuario
+ * GET /songs/popular/:email
+ */
+async getRecommendationByYear(req, res) {
+  const session = getSession();
   
-      // Extraer todos los datos de las canciones
-      const songs = result.records.map(record => {
-        const songNode = record.get('song');
-        return songNode.properties;
-      });
-  
-      // Respuesta exitosa
-      res.status(200).json({
-        success: true,
-        message: 'Recomendaciones por año encontradas',
-        data: songs,
-        count: songs.length
-      });
-    }
-  
-    catch (error) {
-      console.error('Error al buscar recomendaciones por año:', error);
-      res.status(500).json({
+  try {
+    const { email } = req.params;
+    
+    if (!email) {
+      return res.status(400).json({
         success: false,
-        message: 'Error interno del servidor',
-        error: error.message
+        message: 'Email requerido'
       });
-    } finally {
-      await session.close();
     }
 
-  },
-
-
-  /**
-   * Recomendacion de canciones basada en el año de las canciones que le gustan a un usuario
-   * GET /songs/popular/:email
-   */
-
-  async getRecommendationByYear(req, res) {
-    const session = getSession();
-    
-    try {
-      const { email } = req.params;
-      
-      // Validar que el email esté presente
-      if (!email) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email requerido'
-        });
-      }
-    
-      // Recomendacion de canciones basada en el año de las canciones que le gustan al usuario
-      const query = `
-        
+    const query = `
       MATCH (u:User {email: $email})-[l:listen]->(s:Song)-[:released_in]->(y:Year)
       WITH u, y, SUM(l.strength) AS totalStrength
       ORDER BY totalStrength DESC
@@ -383,49 +319,63 @@ const SongController = {
 
       MATCH (rec:Song)-[:released_in]->(ry:Year)
       WHERE ry IN topYears AND NOT (u)-[:listen]->(rec)
-
-      RETURN rec.name AS title
-      ORDER BY rand()
-      LIMIT 5
-      `;
       
-      const result = await session.run(query, { email });
+      RETURN rec {
+        .name,
+        .cover,
+        .code,
+        .reproductions,
+        .producer,
+        .writer,
+        .bpm,
+        .likes
+      } AS song
+      ORDER BY rand()
+      LIMIT 15
+    `;
     
-      // Verificar si se encontraron canciones
-      if (result.records.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'No se encontraron recomendaciones por año para este usuario o el usuario no existe'
-        });
-      }
+    const result = await session.run(query, { email });
   
-      // Extraer todos los datos de las canciones
-      const songs = result.records.map(record => {
-        const songNode = record.get('song');
-        return songNode.properties;
-      });
-  
-      // Respuesta exitosa
-      res.status(200).json({
-        success: true,
-        message: 'Recomendaciones por año encontradas',
-        data: songs,
-        count: songs.length
-      });
-    }
-  
-    catch (error) {
-      console.error('Error al buscar recomendaciones por año:', error);
-      res.status(500).json({
+    if (result.records.length === 0) {
+      return res.status(404).json({
         success: false,
-        message: 'Error interno del servidor',
-        error: error.message
+        message: 'No se encontraron recomendaciones por año para este usuario o el usuario no existe'
       });
-    } finally {
-      await session.close();
     }
 
-  },
+    // Extraer todas las propiedades de las canciones
+    const songs = result.records.map(record => {
+      const songData = record.get('song');
+      return {
+        name: songData.name,
+        cover: songData.cover,
+        code: songData.code,
+        reproductions: songData.reproductions,
+        producer: songData.producer,
+        writer: songData.writer,
+        bpm: songData.bpm,
+        likes: songData.likes
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Canciones encontradas',
+      data: songs,
+      count: songs.length
+    });
+  }
+  catch (error) {
+    console.error('Error al buscar recomendaciones por año:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: error.message
+    });
+  } finally {
+    await session.close();
+  }
+}
 
 
   
