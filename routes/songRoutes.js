@@ -14,4 +14,7 @@ router.get('/recommendations/similar/:email', userController.getFriendsRecommend
 // GET /songs/ - Recomendacion de canciones basadas en generos
 router.get('/recommendations/genres/:email', userController.getRecommendationByGenre);
 
+// GET /songs/ - Recomendacion de canciones basadas en años
+router.get('/recommendations/years/:email', userController.getRecommendationByYear);
+
 module.exports = router;
