@@ -220,27 +220,31 @@ const SongController = {
    * GET /songs/popular/:email
    */
 
-  async getRecommendationByGenre(req, res) {
-    const session = getSession();
+  /**
+ * Recomendacion de canciones segun el genero que escucha un usuario
+ * GET /songs/popular/:email
+ */
+async getRecommendationByGenre(req, res) {
+  const session = getSession();
+  
+  try {
+    const { email } = req.params;
     
-    try {
-      const { email } = req.params;
-      
-      // Validar que el email esté presente
-      if (!email) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email requerido'
-        });
-      }
-    
-      // Recomendacion de canciones basada 
-      const query = `
-        
+    // Validar que el email esté presente
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email requerido'
+      });
+    }
+  
+    // Recomendacion de canciones basada en género
+    const query = `
       MATCH (u:User {email: $email})-[l:listen]->(:Song)-[:has_genre]->(g:Gender)
       WITH u, g, SUM(l.strength) AS genreScore
       ORDER BY genreScore DESC
       WITH u, COLLECT({genre: g, score: genreScore}) AS topGenres
+      LIMIT 3
 
       UNWIND topGenres AS genreData
       WITH u, genreData.genre AS g, genreData.score AS genreScore
@@ -248,48 +252,64 @@ const SongController = {
       MATCH (s:Song)-[:has_genre]->(g)
       WHERE NOT (u)-[:listen]->(s)
 
-      RETURN s.name AS Nombre
+      RETURN s {
+        .name,
+        .cover,
+        .code,
+        .reproductions,
+        .producer,
+        .writer,
+        .bpm,
+        .likes
+      } AS song
       ORDER BY genreScore DESC, rand()
-      LIMIT 5
-      `;
-      
-      const result = await session.run(query, { email });
+      LIMIT 15
+    `;
     
-      // Verificar si se encontraron canciones
-      if (result.records.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'No se encontraron canciones populares por género para este usuario o el usuario no existe'
-        });
-      }
+    const result = await session.run(query, { email });
   
-      // Extraer todos los datos de las canciones
-      const songs = result.records.map(record => {
-        const songNode = record.get('song');
-        return songNode.properties;
-      });
-  
-      // Respuesta exitosa
-      res.status(200).json({
-        success: true,
-        message: 'Canciones populares por género encontradas',
-        data: songs,
-        count: songs.length
-      });
-    }
-  
-    catch (error) {
-      console.error('Error al buscar canciones populares por género:', error);
-      res.status(500).json({
+    // Verificar si se encontraron canciones
+    if (result.records.length === 0) {
+      return res.status(404).json({
         success: false,
-        message: 'Error interno del servidor',
-        error: error.message
+        message: 'No se encontraron canciones populares por género para este usuario o el usuario no existe'
       });
-    } finally {
-      await session.close();
     }
 
-  },
+    // Extraer todas las propiedades de las canciones
+    const songs = result.records.map(record => {
+      const songData = record.get('song');
+      return {
+        name: songData.name,
+        cover: songData.cover,
+        code: songData.code,
+        reproductions: songData.reproductions,
+        producer: songData.producer,
+        writer: songData.writer,
+        bpm: songData.bpm,
+        likes: songData.likes
+      };
+    });
+
+    // Respuesta exitosa
+    res.status(200).json({
+      success: true,
+      message: 'Canciones encontradas',
+      data: songs,
+      count: songs.length
+    });
+  }
+  catch (error) {
+    console.error('Error al buscar canciones populares por género:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: error.message
+    });
+  } finally {
+    await session.close();
+  }
+},
 
   /**
  * Recomendacion de canciones basada en el año de las canciones que le gustan a un usuario
