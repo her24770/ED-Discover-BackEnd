@@ -8,7 +8,10 @@ router.get('/user/:email', userController.getUserLikedSongs);
 // GET /songs / - Canciones populares que un usuario no ha escuchado y pertenecen a los géneros escucha.
 router.get('/recommendations/popular/:email', userController.getPopularRecommendations);
 
-// GET /users/  - Usuarios con gustos similares
+// GET /users/  - Usuarios con gustos similares a un usuario
 router.get('/recommendations/similar/:email', userController.getFriendsRecommendations);
+
+// GET /songs/ - Recomendacion de canciones basadas en generos
+router.get('/recommendations/genres/:email', userController.getRecommendationByGenre);
 
 module.exports = router;
