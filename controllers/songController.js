@@ -161,7 +161,7 @@ const SongController = {
         // y calcular la similitud usando el índice de Jaccard
         const query = `
 
-          MATCH (me:User {name: 'Sebastian'})-[:listen]->(s:Song)<-[:listen]-(other:User)
+          MATCH (me:User {email: $email})-[:listen]->(s:Song)<-[:listen]-(other:User)
           WHERE me <> other
           WITH other, COLLECT(DISTINCT s) AS sharedSongs
 
