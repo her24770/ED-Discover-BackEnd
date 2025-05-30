@@ -26,5 +26,9 @@ router.get('/topemotions/:email', userController.getTopEmotionsByUserEmail);
 // POST /users/top 5 albums
 router.get('/topalbums/:email', userController.getTopAlbumsByUserEmail);
 
+// POST /users/user-song edit listen
+router.post('/song-weight', userController.updateSongWeight);
+
+
 
 module.exports = router;

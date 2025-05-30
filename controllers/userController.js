@@ -468,6 +468,51 @@ async getTopAlbumsByUserEmail(req, res) {
 },
 
 
+/**
+ * Incrementar el peso de una relación :listen entre un usuario y una canción
+ * POST /api/users/song-weight
+ */
+async updateSongWeight(req, res) {
+  const session = getSession();
+  try {
+    const { email, name } = req.body;
+
+    if (!email || !name) {
+      return res.status(400).json({ success: false, message: 'El email y el nombre de la canción son requeridos' });
+    }
+
+    const query = `
+      MATCH (u:User { email: $email })-[r:listen]->(s:Song { name: $name })
+      SET r.strength = coalesce(r.strength, 0) + 1
+      RETURN r
+    `;
+
+    const result = await session.run(query, { email, name });
+
+    if (result.records.length === 0) {
+      return res.status(404).json({ success: false, message: 'Relación listen no encontrada entre usuario y canción' });
+    }
+
+    const relation = result.records[0].get('r').properties;
+
+    res.status(200).json({
+      success: true,
+      message: 'Peso de la canción actualizado',
+      data: relation
+    });
+  } catch (error) {
+    console.error('Error al actualizar el peso de la canción:', error);
+    res.status(500).json({ success: false, message: 'Error interno', error: error.message });
+  } finally {
+    await session.close();
+  }
+},
+
+
+
+
+
+
 
 
 };
